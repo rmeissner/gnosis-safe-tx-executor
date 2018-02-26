@@ -1,0 +1,1 @@
+web: gunicorn gnosis_funding.wsgi --log-file -
