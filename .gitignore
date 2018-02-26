@@ -1,0 +1,6 @@
+env/
+*.sqlite3
+*.idea
+google_account.json
+local_settings.py
+__pycache__/
