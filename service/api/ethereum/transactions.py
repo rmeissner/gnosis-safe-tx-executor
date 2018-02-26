@@ -5,8 +5,8 @@ from rlp.utils import str_to_bytes, ascii_chr, encode_hex
 
 # in the yellow paper it is specified that s should be smaller than
 # secpk1n (eq.205)
-from gnosis_funding.api.ethereum import utils
-from gnosis_funding.api.ethereum.utils import normalize_key, ecsign
+from service.api.ethereum import utils
+from service.api.ethereum.utils import normalize_key, ecsign
 
 secpk1n = 115792089237316195423570985008687907852837564279074904382605163141518161494337
 null_address = b'\xff' * 20
