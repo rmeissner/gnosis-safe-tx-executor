@@ -53,7 +53,7 @@ def _build_save_execute_transactions(address, value):
 
 
 def _send_transaction(address, value=0, data="", gas=None):
-    nonce = parse_int_or_hex(rpc_result("eth_getTransactionCount", [sender, "latest"]))
+    nonce = parse_int_or_hex(rpc_result("eth_getTransactionCount", [sender, "pending"]))
     if not gas:
         gas = estimate_tx(sender, address, value, data)
     tx = Transaction(nonce, 100000000, gas, address, value, parse_as_bin(data)).sign(
