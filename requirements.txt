@@ -41,10 +41,8 @@ requests==2.11.1
 rlp==0.6.0
 scandir==1.5
 sha256==0.1
-SimpleWebSocketServer==0.1.0
 six==1.10.0
 tabulate==0.8.2
-thefuck==3.16
 two1==3.10.8
 urllib3==1.22
 websocket-client==0.47.0
