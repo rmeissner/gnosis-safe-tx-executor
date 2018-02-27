@@ -64,11 +64,12 @@ def _send_transaction(address, value=0, data="", gas=None):
 @api_view(["POST"])
 def execute_tx(request):
     target = request.data.get("target")
-    if not target or len(target) != 42 or not target.startswith("0x") or not all(c in string.hexdigits for c in target[2:]):
+    if not target or len(target) != 42 or not target.startswith("0x") or not all(
+                    c in string.hexdigits for c in target[2:]):
         return Response({"error": "invalid safe address (format: <40 hex chars>)"}, 400)
 
     data = request.data.get("data")
     if not data or not data.startswith("0x") or not all(c in string.hexdigits for c in data[2:]):
         return Response({"error": "invalid data (format: <hex chars>)"}, 400)
 
-    return Response(_send_transaction(target, data=data))
+    return Response({"hash": _send_transaction(target, data=data)})
