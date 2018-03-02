@@ -116,3 +116,10 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 FUNDING_ACCOUNT_PHRASE = os.environ.get('FUNDING_ACCOUNT_PHRASE')
+
+# Google settings
+
+GOOGLE_ANDROID_PACKAGE = 'pm.gnosis.heimdall.dev'
+GOOGLE_END_POINT = 'https://www.googleapis.com/androidpublisher/v2/applications/%s/purchases/subscriptions/%s/tokens/%s'
+GOOGLE_CREDENTIALS = os.environ.get('GOOGLE_CREDENTIALS')
+GOOGLE_SCOPE = 'https://www.googleapis.com/auth/androidpublisher'

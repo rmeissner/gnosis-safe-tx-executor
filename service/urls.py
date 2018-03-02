@@ -18,5 +18,5 @@ from django.urls import path
 from service.api.views import execute_tx
 
 urlpatterns = [
-    path('api/1/execute_tx', execute_tx),
+    path('api/1/execute_tx', execute_tx)
 ]

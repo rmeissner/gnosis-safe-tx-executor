@@ -3,6 +3,7 @@ import string
 
 import requests
 import rlp
+import time
 from pywallet.utils import HDPrivateKey, HDKey
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -10,12 +11,13 @@ from two1.bitcoin.utils import bytes_to_str
 
 from service.api.ethereum.transactions import Transaction
 from service.api.ethereum.utils import parse_int_or_hex, int_to_hex, parse_as_bin, is_numeric
+from service.api.google import check_subscription_token
 from service.settings import FUNDING_ACCOUNT_PHRASE
 
 master_key = HDPrivateKey.master_key_from_mnemonic(FUNDING_ACCOUNT_PHRASE)
 root_key = HDKey.from_path(master_key, "m/44'/60'/0'/0/0")
 sender = root_key[-1].public_key.address()
-
+HTTP_SUBSCRIPTION_TOKEN = 'HTTP_SUBSCRIPTION_TOKEN'
 
 def _request_headers():
     return {
@@ -71,5 +73,16 @@ def execute_tx(request):
     data = request.data.get("data")
     if not data or not data.startswith("0x") or not all(c in string.hexdigits for c in data[2:]):
         return Response({"error": "invalid data (format: <hex chars>)"}, 400)
+
+    token = request.META.get(HTTP_SUBSCRIPTION_TOKEN)
+    if not token or len(token) == 0:
+        return Response({"error": "missing subscription token"}, 400)
+
+    product_id = "pm.gnosis.heimdall.dev.transaction_execution_rinkeby_1"
+    purchase = check_subscription_token(product_id, token)
+    current_time = int(round(time.time() * 1000))
+    purchase_time = purchase.get("expiryTimeMillis")
+    if not purchase_time or purchase_time < current_time:
+        return Response({"error": "no active subscription"}, 401)
 
     return Response({"hash": _send_transaction(target, data=data)})
