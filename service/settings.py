@@ -119,6 +119,7 @@ FUNDING_ACCOUNT_PHRASE = os.environ.get('FUNDING_ACCOUNT_PHRASE')
 
 # Google settings
 
+ANDROID_PRODUCT_ID = os.environ.get('ANDROID_PRODUCT_ID', 'pm.gnosis.heimdall.dev.transaction_execution_rinkeby_1')
 GOOGLE_ANDROID_PACKAGE = 'pm.gnosis.heimdall.dev'
 GOOGLE_END_POINT = 'https://www.googleapis.com/androidpublisher/v2/applications/%s/purchases/subscriptions/%s/tokens/%s'
 GOOGLE_CREDENTIALS = os.environ.get('GOOGLE_CREDENTIALS')

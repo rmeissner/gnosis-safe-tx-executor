@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from two1.bitcoin.utils import bytes_to_str
 
+from service import settings
 from service.api.ethereum.transactions import Transaction
 from service.api.ethereum.utils import parse_int_or_hex, int_to_hex, parse_as_bin, is_numeric
 from service.api.google import check_subscription_token
@@ -78,8 +79,7 @@ def execute_tx(request):
     if not token or len(token) == 0:
         return Response({"error": "missing subscription token"}, 400)
 
-    product_id = "pm.gnosis.heimdall.dev.transaction_execution_rinkeby_1"
-    purchase = check_subscription_token(product_id, token)
+    purchase = check_subscription_token(settings.ANDROID_PRODUCT_ID, token)
     current_time = int(round(time.time() * 1000))
     purchase_time = purchase.get("expiryTimeMillis")
     if not purchase_time or purchase_time < current_time:
