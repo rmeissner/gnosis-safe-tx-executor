@@ -81,8 +81,8 @@ def execute_tx(request):
 
     purchase = check_subscription_token(settings.ANDROID_PRODUCT_ID, token)
     current_time = int(round(time.time() * 1000))
-    purchase_time = purchase.get("expiryTimeMillis")
-    if not purchase_time or purchase_time < current_time:
+    purchase_time_str = purchase.get("expiryTimeMillis")
+    if not purchase_time_str or int(purchase_time_str) < current_time:
         return Response({"error": "no active subscription"}, 401)
 
     return Response({"hash": _send_transaction(target, data=data)})
