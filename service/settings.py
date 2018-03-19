@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'service.api',
 ]
 
 MIDDLEWARE = [
@@ -74,8 +76,12 @@ WSGI_APPLICATION = 'service.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'gnosis',
+        'USER': 'gnosis',
+        'PASSWORD': '',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
@@ -119,8 +125,14 @@ FUNDING_ACCOUNT_PHRASE = os.environ.get('FUNDING_ACCOUNT_PHRASE')
 
 # Google settings
 
-ANDROID_PRODUCT_ID = os.environ.get('ANDROID_PRODUCT_ID', 'pm.gnosis.heimdall.dev.transaction_execution_rinkeby_1')
+ANDROID_SUBSCRIPTION_ID = os.environ.get('ANDROID_SUBSCRIPTION_ID', 'pm.gnosis.heimdall.dev.transaction_execution_rinkeby_1')
+ANDROID_PRODUCT_ID = os.environ.get('ANDROID_PRODUCT_ID', 'pm.gnosis.heimdall.dev.100_transaction_executions_rinkeby_1')
+PRODUCT_CREDITS = int(os.environ.get('PRODUCT_CREDITS', '50'))
+MAX_CREDITS = int(os.environ.get('MAX_CREDITS', '100'))
 GOOGLE_ANDROID_PACKAGE = 'pm.gnosis.heimdall.dev'
-GOOGLE_END_POINT = 'https://www.googleapis.com/androidpublisher/v2/applications/%s/purchases/subscriptions/%s/tokens/%s'
+GOOGLE_SUBSCRIPTIONS_ENDPOINT = 'https://www.googleapis.com/androidpublisher/v2/applications/%s/purchases/subscriptions/%s/tokens/%s'
+GOOGLE_PRODUCTS_ENDPOINT = 'https://www.googleapis.com/androidpublisher/v2/applications/%s/purchases/products/%s/tokens/%s'
 GOOGLE_CREDENTIALS = os.environ.get('GOOGLE_CREDENTIALS')
+DEFAULT_GAS_PRICE = int(os.environ.get('DEFAULT_GAS_PRICE', '100000000'))
+GAS_PER_CREDIT = int(os.environ.get('GAS_PER_CREDIT', '60000'))
 GOOGLE_SCOPE = 'https://www.googleapis.com/auth/androidpublisher'

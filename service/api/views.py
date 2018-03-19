@@ -10,15 +10,20 @@ from rest_framework.response import Response
 from two1.bitcoin.utils import bytes_to_str
 
 from service import settings
+from service.api.ethereum.authentication import get_sender
 from service.api.ethereum.transactions import Transaction
-from service.api.ethereum.utils import parse_int_or_hex, int_to_hex, parse_as_bin, is_numeric
-from service.api.google import check_subscription_token
-from service.settings import FUNDING_ACCOUNT_PHRASE
+from service.api.ethereum.utils import parse_int_or_hex, int_to_hex, parse_as_bin, is_numeric, sha3
+from service.api.google import check_subscription_token, check_product_token
+from service.api.models import Credits, Order
+from service.settings import FUNDING_ACCOUNT_PHRASE, DEFAULT_GAS_PRICE, GAS_PER_CREDIT, PRODUCT_CREDITS, MAX_CREDITS
 
 master_key = HDPrivateKey.master_key_from_mnemonic(FUNDING_ACCOUNT_PHRASE)
 root_key = HDKey.from_path(master_key, "m/44'/60'/0'/0/0")
 sender = root_key[-1].public_key.address()
 HTTP_SUBSCRIPTION_TOKEN = 'HTTP_SUBSCRIPTION_TOKEN'
+HTTP_AUTH_ACCOUNT = 'HTTP_AUTH_ACCOUNT'
+HTTP_AUTH_SIGNATURE = 'HTTP_AUTH_SIGNATURE'
+
 
 def _request_headers():
     return {
@@ -55,20 +60,25 @@ def _build_save_execute_transactions(address, value):
     return "0xa9059cbb" + address[2:].zfill(64) + int_to_hex(value)[2:].zfill(64)
 
 
-def _send_transaction(address, value=0, data="", gas=None):
-    nonce = parse_int_or_hex(rpc_result("eth_getTransactionCount", [sender, "pending"]))
-    if not gas:
-        gas = estimate_tx(sender, address, value, data)
-    tx = Transaction(nonce, 100000000, gas, address, value, parse_as_bin(data)).sign(
+def _get_nonce():
+    return parse_int_or_hex(rpc_result("eth_getTransactionCount", [sender, "pending"]))
+
+
+def _estimate_transaction(address, value=0, data=""):
+    return estimate_tx(sender, address, value, data)
+
+
+def _send_transaction(address, nonce, gas, value=0, data=""):
+    tx = Transaction(nonce, DEFAULT_GAS_PRICE, gas, address, value, parse_as_bin(data)).sign(
         bytes_to_str(bytes(root_key[-1])[-32:]))
     return rpc_result("eth_sendRawTransaction", ["0x" + bytes_to_str(rlp.encode(tx))])
 
 
 @api_view(["POST"])
-def execute_tx(request):
+def execute_tx_subscription(request):
     target = request.data.get("target")
     if not target or len(target) != 42 or not target.startswith("0x") or not all(
-                    c in string.hexdigits for c in target[2:]):
+            c in string.hexdigits for c in target[2:]):
         return Response({"error": "invalid safe address (format: <40 hex chars>)"}, 400)
 
     data = request.data.get("data")
@@ -79,11 +89,93 @@ def execute_tx(request):
     if not token or len(token) == 0:
         return Response({"error": "missing subscription token"}, 400)
 
-    purchase = check_subscription_token(settings.ANDROID_PRODUCT_ID, token)
+    purchase = check_subscription_token(settings.ANDROID_SUBSCRIPTION_ID, token)
     current_time = int(round(time.time() * 1000))
     expiry_time_str = purchase.get("expiryTimeMillis")
     print("Expiry time: " + expiry_time_str)
     if not expiry_time_str or int(expiry_time_str) < current_time:
         return Response({"error": "no active subscription"}, 401)
 
-    return Response({"hash": _send_transaction(target, data=data)})
+    nonce = _get_nonce()
+    estimate = _estimate_transaction(target, data=data)
+    return Response({"hash": _send_transaction(target, nonce, estimate, data=data)})
+
+
+@api_view(["POST"])
+def execute_tx_credits(request):
+    account = request.META.get(HTTP_AUTH_ACCOUNT)
+    signature = request.META.get(HTTP_AUTH_SIGNATURE)
+
+    if not account or len(account) != 42 or not signature or len(signature) == 0:
+        return Response({"error": "missing authentication"}, 401)
+
+    if account != get_sender(sha3(account), signature):
+        return Response({"error": "invalid authentication"}, 401)
+
+    target = request.data.get("target")
+    if not target or len(target) != 42 or not target.startswith("0x") or not all(
+            c in string.hexdigits for c in target[2:]):
+        return Response({"error": "invalid safe address (format: <40 hex chars>)"}, 400)
+
+    data = request.data.get("data")
+    if not data or not data.startswith("0x") or not all(c in string.hexdigits for c in data[2:]):
+        return Response({"error": "invalid data (format: <hex chars>)"}, 400)
+
+    nonce = _get_nonce()
+    estimate = _estimate_transaction(target, data=data)
+    required_credits = int(estimate / GAS_PER_CREDIT)
+
+    account_credits = Credits.objects.get(account=account)
+    if not account_credits or account_credits.amount < required_credits:
+        return Response({"error": "not enough credits"}, 403)
+    account_credits.amount -= required_credits
+    account_credits.save()
+
+    # noinspection PyBroadException
+    try:
+        return Response({"hash": _send_transaction(target, nonce, estimate, data=data)})
+    except Exception:
+        account_credits.amount += required_credits
+        account_credits.save()
+        return Response({"error": "could not commit transaction"})
+
+
+@api_view(["POST"])
+def redeem_voucher(request):
+    account = request.META.get(HTTP_AUTH_ACCOUNT)
+    signature = request.META.get(HTTP_AUTH_SIGNATURE)
+
+    if not account or len(account) != 42 or not signature or len(signature) == 0:
+        return Response({"error": "missing authentication"}, 401)
+
+    #if account != get_sender(sha3(account), signature):
+    #    return Response({"error": "invalid authentication"}, 401)
+
+    token = request.data.get("voucher_id")
+    if not token or len(token) == 0:
+        return Response({"error": "missing voucher"}, 400)
+
+    purchase = check_product_token(settings.ANDROID_PRODUCT_ID, token)
+    if not purchase:
+        return Response({"error": "invalid voucher"}, 400)
+
+    order_id = purchase.get("orderId")
+    consumption_state = purchase.get("consumptionState")
+    purchase_state = purchase.get("purchaseState")
+
+    if not order_id or consumption_state != 0 or purchase_state != 0:
+        return Response({"error": "voucher has already be redeemed"}, 400)
+
+    # noinspection PyBroadException
+    try:
+        Order(account=account, id=order_id).save()
+    except Exception:
+        return Response({"error": "voucher has already be redeemed"}, 400)
+
+    account_credits = Credits.objects.get(account=account)
+    if not account_credits or account_credits.amount + PRODUCT_CREDITS > MAX_CREDITS:
+        return Response({"error": "maximum amounts of credits reached %s" % MAX_CREDITS}, 400)
+    account_credits.amount += PRODUCT_CREDITS
+    account_credits.save()
+
+    return Response({"balance": account_credits.amount})

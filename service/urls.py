@@ -15,8 +15,10 @@ Including another URLconf
 """
 from django.urls import path
 
-from service.api.views import execute_tx
+from service.api.views import execute_tx_subscription, execute_tx_credits, redeem_voucher
 
 urlpatterns = [
-    path('api/1/execute_tx', execute_tx)
+    path('api/1/execute_tx', execute_tx_subscription),
+    path('api/2/execute_tx', execute_tx_credits),
+    path('api/1/redeem', redeem_voucher)
 ]
