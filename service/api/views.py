@@ -55,6 +55,14 @@ def estimate_tx(sender, address, value, data):
     return parse_int_or_hex(rpc_result("eth_estimateGas", [data]))
 
 
+def get_or_none(model, *args, **kwargs):
+    # noinspection PyBroadException
+    try:
+        return model.objects.get(*args, **kwargs)
+    except Exception:
+        return None
+
+
 def _build_save_execute_transactions(address, value):
     # TODO: build correct payload
     return "0xa9059cbb" + address[2:].zfill(64) + int_to_hex(value)[2:].zfill(64)
@@ -109,7 +117,7 @@ def execute_tx_credits(request):
     if not account or len(account) != 42 or not signature or len(signature) == 0:
         return Response({"error": "missing authentication"}, 401)
 
-    if account != get_sender(sha3(account), signature):
+    if account != get_sender(account, signature):
         return Response({"error": "invalid authentication"}, 401)
 
     target = request.data.get("target")
@@ -125,7 +133,7 @@ def execute_tx_credits(request):
     estimate = _estimate_transaction(target, data=data)
     required_credits = int(estimate / GAS_PER_CREDIT)
 
-    account_credits = Credits.objects.get(account=account)
+    account_credits = get_or_none(Credits, account=account)
     if not account_credits or account_credits.amount < required_credits:
         return Response({"error": "not enough credits"}, 403)
     account_credits.amount -= required_credits
@@ -141,6 +149,36 @@ def execute_tx_credits(request):
 
 
 @api_view(["POST"])
+def estimate_tx_credits(request):
+    account = request.META.get(HTTP_AUTH_ACCOUNT)
+    signature = request.META.get(HTTP_AUTH_SIGNATURE)
+
+    if not account or len(account) != 42 or not signature or len(signature) == 0:
+        return Response({"error": "missing authentication"}, 401)
+
+    if account != get_sender(sha3(account), signature):
+        return Response({"error": "invalid authentication"}, 401)
+
+    target = request.data.get("target")
+    if not target or len(target) != 42 or not target.startswith("0x") or not all(
+            c in string.hexdigits for c in target[2:]):
+        return Response({"error": "invalid safe address (format: <40 hex chars>)"}, 400)
+
+    data = request.data.get("data")
+    if not data or not data.startswith("0x") or not all(c in string.hexdigits for c in data[2:]):
+        return Response({"error": "invalid data (format: <hex chars>)"}, 400)
+
+    estimate = _estimate_transaction(target, data=data)
+    required_credits = int(estimate / GAS_PER_CREDIT)
+
+    account_credits = get_or_none(Credits, account=account)
+    return Response({
+        "required_credits": required_credits,
+        "balance": account_credits.amount if account_credits else 0
+    })
+
+
+@api_view(["POST"])
 def redeem_voucher(request):
     account = request.META.get(HTTP_AUTH_ACCOUNT)
     signature = request.META.get(HTTP_AUTH_SIGNATURE)
@@ -148,8 +186,10 @@ def redeem_voucher(request):
     if not account or len(account) != 42 or not signature or len(signature) == 0:
         return Response({"error": "missing authentication"}, 401)
 
-    #if account != get_sender(sha3(account), signature):
-    #    return Response({"error": "invalid authentication"}, 401)
+    recovered = get_sender(account, signature)
+    print("expected %s, got %s" % (account, recovered))
+    if account != recovered:
+        return Response({"error": "invalid authentication"}, 401)
 
     token = request.data.get("voucher_id")
     if not token or len(token) == 0:
@@ -168,14 +208,33 @@ def redeem_voucher(request):
 
     # noinspection PyBroadException
     try:
-        Order(account=account, id=order_id).save()
+        Order.objects.create(account=account, id=order_id)
     except Exception:
         return Response({"error": "voucher has already be redeemed"}, 400)
 
-    account_credits = Credits.objects.get(account=account)
+    account_credits, _ = Credits.objects.get_or_create(account=account)
     if not account_credits or account_credits.amount + PRODUCT_CREDITS > MAX_CREDITS:
-        return Response({"error": "maximum amounts of credits reached %s" % MAX_CREDITS}, 400)
+        return Response({"error": "maximum amounts of credits reached (%s)" % MAX_CREDITS}, 400)
     account_credits.amount += PRODUCT_CREDITS
     account_credits.save()
 
     return Response({"balance": account_credits.amount})
+
+
+@api_view(["GET"])
+def check_balance(request):
+    account = request.META.get(HTTP_AUTH_ACCOUNT)
+    signature = request.META.get(HTTP_AUTH_SIGNATURE)
+
+    if not account or len(account) != 42 or not signature or len(signature) == 0:
+        return Response({"error": "missing authentication"}, 401)
+
+    if account != get_sender(account, signature):
+        return Response({"error": "invalid authentication"}, 401)
+
+    # noinspection PyBroadException
+    try:
+        account_credits = Credits.objects.create(account=account)
+        return Response({"balance": account_credits.amount})
+    except Exception:
+        return Response({"balance": "0"})

@@ -1,19 +1,16 @@
 import binascii
-import json
 
-import requests
-
-from service import settings
 from service.api.ethereum.utils import sha3, pubtoaddr, ecrecover_to_pub
 
 
-def get_sender(message, signature):
+def get_sender(account, signature):
     # noinspection PyBroadException
     try:
-        return binascii.hexlify(
+        return "0x" + binascii.hexlify(
             pubtoaddr(
-                ecrecover_to_pub(binascii.unhexlify(message), binascii.unhexlify(signature))
+                ecrecover_to_pub(sha3(binascii.unhexlify(account[2:])), binascii.unhexlify(signature))
             )
         ).lower().decode()
-    except Exception:
+    except Exception as e:
+        print(e)
         return None
